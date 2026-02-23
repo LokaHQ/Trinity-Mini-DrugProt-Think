@@ -1,0 +1,6 @@
+torch
+transformers==4.57.3
+peft==0.14.0
+accelerate==0.34
+safetensors==0.4
+huggingface_hub==0.24

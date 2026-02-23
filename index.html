@@ -1,0 +1,2523 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="A practical ablation study: GRPO-style reinforcement learning with LoRA on Arcee Trinity Mini for DrugProt drug-protein relation extraction. We sweep LoRA alpha, learning rate, batch size, max tokens, temperature, and rollout budget to find what actually moves the needle."
+    />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Post-Training an Open MoE Model to Extract Drug-Protein Relations: Trinity-Mini-DrugProt-Think" />
+    <meta property="og:description" content="A practical ablation study: GRPO-style reinforcement learning with LoRA on Arcee Trinity Mini for DrugProt drug-protein relation extraction. We sweep LoRA alpha, learning rate, batch size, max tokens, temperature, and rollout budget to find what actually moves the needle." />
+	    <meta property="og:image" content="https://raw.githubusercontent.com/LokaHQ/Trinity-Mini-DrugProt-Think/main/assets/logo.png" />
+    <meta property="og:image:alt" content="TRINITY: Trinity-Mini-DrugProt-Think cover image." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Post-Training an Open MoE Model to Extract Drug-Protein Relations: Trinity-Mini-DrugProt-Think" />
+    <meta name="twitter:description" content="A practical ablation study: GRPO-style reinforcement learning with LoRA on Arcee Trinity Mini for DrugProt drug-protein relation extraction. We sweep LoRA alpha, learning rate, batch size, max tokens, temperature, and rollout budget to find what actually moves the needle." />
+	    <meta name="twitter:image" content="https://raw.githubusercontent.com/LokaHQ/Trinity-Mini-DrugProt-Think/main/assets/logo.png" />
+    <title>Post-Training an Open MoE Model to Extract Drug-Protein Relations: Trinity-Mini-DrugProt-Think</title>
+    <link rel="icon" type="image/svg+xml" href="https://cdn.prod.website-files.com/6490383845d4c0f51f929ca8/649052c9d3731fb704eea658_favicon.svg" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+      @font-face {
+        font-family: "Iowan Old Style BT";
+        src: url("https://thinkingmachines.ai/fonts/iowan-old-style/iowan-old-style_regular.woff2")
+          format("woff2");
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Iowan Old Style BT";
+        src: url("https://thinkingmachines.ai/fonts/iowan-old-style/iowan-old-style_italic.woff2")
+          format("woff2");
+        font-style: italic;
+        font-weight: 400;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "Iowan Old Style BT";
+        src: url("https://thinkingmachines.ai/fonts/iowan-old-style/iowan-old-style_bold.woff2")
+          format("woff2");
+        font-style: normal;
+        font-weight: 600;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "GT America";
+        src: url("https://thinkingmachines.ai/fonts/gt-america/GT-America-Standard-Regular.woff2")
+          format("woff2");
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+      }
+
+      @font-face {
+        font-family: "GT America";
+        src: url("https://thinkingmachines.ai/fonts/gt-america/GT-America-Standard-Medium.woff2")
+          format("woff2");
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+      }
+
+      :root {
+        --bg: #fff;
+        --bg-soft: #f7f7f7;
+        --bg-code: #f4f4f3;
+        --fg: #1a1a1a;
+        --fg-2: #333;
+        --fg-3: #666;
+        --fg-4: #999;
+        --line: #e5e5e5;
+        --line-strong: #d0d0d0;
+        --accent: #1877f2;
+        --link: #1877f2;
+        --max-content: 680px;
+        --max-wide: 900px;
+        --toc-width: 200px;
+        --toc-gap: 40px;
+        --font-serif: "Iowan Old Style BT", Georgia, "Times New Roman", serif;
+        --font-sans: "GT America", -apple-system, "Segoe UI", "Helvetica Neue",
+          Helvetica, sans-serif;
+        --font-mono: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono",
+          Consolas, monospace;
+        --c-blue: #1877f2;
+        --c-red: #ef4444;
+        --c-green: #22c55e;
+        --c-amber: #f59e0b;
+        --c-purple: #8b5cf6;
+        --c-teal: #14b8a6;
+        --c-gray: #6b7280;
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--font-serif);
+        font-size: 17px;
+        line-height: 1.7;
+      }
+
+      a {
+        color: var(--link);
+      }
+
+      /* ── Reading progress ── */
+      .reading-progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 0%;
+        height: 2px;
+        background: var(--accent);
+        z-index: 1000;
+        transition: width 0.1s linear;
+      }
+
+      /* ── Layout ── */
+      .shell {
+        min-height: 100vh;
+      }
+
+      #main.post {
+        max-width: var(--max-wide);
+        margin: 0 auto;
+        padding: 0 1.6rem 4rem;
+        position: relative;
+      }
+
+      /* ── Header ── */
+      .post-heading {
+        text-align: center;
+        max-width: var(--max-content);
+        margin: 3.5rem auto 0;
+      }
+
+      .post-title {
+        margin: 0;
+        font-size: 2.4rem;
+        line-height: 1.2;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+
+      .post-title-main {
+        display: block;
+      }
+
+      .post-title-sub {
+        display: block;
+        margin-top: 0.35rem;
+        font-size: 0.92em;
+        font-weight: 600;
+        color: var(--fg-2);
+      }
+
+      .authors {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.5rem 2rem;
+        margin: 1.6rem auto 0;
+        max-width: 420px;
+        text-align: center;
+        font-family: var(--font-sans);
+      }
+
+      .author-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.1rem;
+      }
+
+      .author-name {
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--fg);
+      }
+
+      .author-name a {
+        color: var(--fg);
+        text-decoration: none;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .author-name a:hover {
+        border-bottom-color: var(--fg);
+      }
+
+      .author-email {
+        font-size: 0.82rem;
+        color: var(--fg-3);
+      }
+
+      .author-email a {
+        color: var(--fg-3);
+        text-decoration: none;
+      }
+
+      .author-email a:hover {
+        color: var(--accent);
+      }
+
+      .author-affiliation {
+        margin: 1rem 0 0;
+        text-align: center;
+      }
+
+      .author-affiliation .loka-logo {
+        height: 2rem;
+        vertical-align: middle;
+      }
+
+      .post-date {
+        margin: 0.8rem 0 0;
+        font-family: var(--font-sans);
+        font-size: 0.88rem;
+        color: var(--fg-4);
+      }
+
+      .resource-links {
+        margin: 1rem 0 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        justify-content: center;
+        gap: 1.5rem;
+        font-family: var(--font-sans);
+        font-size: 0.88rem;
+      }
+
+      .resource-links a {
+        color: var(--fg-3);
+        text-decoration: none;
+        border-bottom: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      .resource-links a:hover {
+        color: var(--fg);
+      }
+
+	      .resource-links .icon {
+	        display: inline-block;
+	        width: 2rem;
+	        height: 2rem;
+	      }
+	
+	      .resource-links img.icon {
+	        width: auto;
+	        object-fit: contain;
+	      }
+
+	      /* ── Cover ── */
+      .post-cover {
+        max-width: var(--max-wide);
+        margin: 2.2rem auto 2.5rem;
+      }
+
+      .post-cover img {
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 24px;
+      }
+
+      /* ── Article ── */
+      article.content {
+        max-width: var(--max-content);
+        margin: 0 auto;
+        position: relative;
+      }
+
+      /* ── Callout ── */
+      .callout {
+        border-left: 3px solid var(--accent);
+        padding: 0.8rem 1.1rem;
+        margin-bottom: 1.3rem;
+        background: var(--bg-soft);
+      }
+
+      .callout strong {
+        font-family: var(--font-sans);
+        font-weight: 500;
+      }
+
+      .callout p:first-child {
+        margin-top: 0;
+      }
+
+      .callout p:last-child,
+      .callout ul:last-child {
+        margin-bottom: 0;
+      }
+
+      .callout ul {
+        margin-left: 1.2rem;
+      }
+
+      .callout li {
+        margin-bottom: 0.3rem;
+      }
+
+      /* ── Equations ── */
+      .equation {
+        margin: 0.9rem 0 1.1rem;
+        padding: 0.65rem 1rem;
+        background: var(--bg-soft);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        text-align: center;
+      }
+
+      .equation .equation-inner {
+        display: inline-block;
+        font-size: 1.05em;
+      }
+
+      /* ── Wide figures ── */
+      .figure-wide {
+        max-width: var(--max-wide);
+        margin-left: calc((var(--max-content) - var(--max-wide)) / 2);
+        margin-right: calc((var(--max-content) - var(--max-wide)) / 2);
+      }
+
+      .figure-wide canvas {
+        width: 100% !important;
+        height: auto !important;
+      }
+
+      /* ── Left TOC ── */
+      .left-toc {
+        position: sticky;
+        top: 2rem;
+        float: left;
+        margin-left: calc(-1 * var(--toc-width) - var(--toc-gap));
+        width: var(--toc-width);
+        font-size: 0.85rem;
+        line-height: 1.45;
+        max-height: calc(100vh - 4rem);
+        overflow-y: auto;
+      }
+
+      .toc-title {
+        margin: 0 0 0.5rem;
+        font-family: var(--font-sans);
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--fg-4);
+        font-weight: 500;
+      }
+
+      .toc-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        border-left: 1px solid var(--line);
+      }
+
+      .toc-list li {
+        margin: 0;
+      }
+
+      .toc-list a {
+        display: block;
+        padding: 0.2rem 0 0.2rem 0.85rem;
+        text-decoration: none;
+        color: var(--fg-4);
+        border-left: 2px solid transparent;
+        margin-left: -1px;
+        transition: color 0.15s ease, border-color 0.15s ease;
+      }
+
+      .toc-list a:hover {
+        color: var(--fg-2);
+      }
+
+      .toc-list a.active {
+        color: var(--accent);
+        border-left-color: var(--accent);
+        font-weight: 500;
+      }
+
+      /* ── Content typography ── */
+      .content p,
+      .content ul,
+      .content ol,
+      .content pre,
+      .content blockquote,
+      .content table,
+      .content figure {
+        margin: 0 0 1.3rem;
+      }
+
+      .content h2,
+      .content h3,
+      .content h4 {
+        line-height: 1.3;
+        position: relative;
+      }
+
+      .content h2 {
+        margin: 2.8rem 0 0.9rem;
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .content h3 {
+        margin: 2rem 0 0.7rem;
+        font-size: 1.15rem;
+        font-style: italic;
+        font-weight: 400;
+        color: var(--fg-2);
+      }
+
+      .content h4 {
+        margin: 1.6rem 0 0.5rem;
+        font-size: 1.05rem;
+        font-style: italic;
+        font-weight: 400;
+        color: var(--fg-2);
+      }
+
+      .heading-anchor {
+        position: absolute;
+        left: -1.2rem;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        text-decoration: none;
+        color: var(--fg-4);
+        font-weight: 400;
+        font-size: 0.85em;
+        transition: opacity 0.15s ease;
+      }
+
+      .content h2:hover .heading-anchor,
+      .content h3:hover .heading-anchor,
+      .content h4:hover .heading-anchor,
+      .heading-anchor:focus {
+        opacity: 1;
+      }
+
+      .content ul {
+        margin-left: 1.5rem;
+        padding: 0;
+        list-style: disc;
+      }
+
+      .content ol {
+        margin-left: 1.7rem;
+      }
+
+      .content li {
+        margin-bottom: 0.25rem;
+      }
+
+      .content a {
+        text-decoration-color: var(--line-strong);
+        text-underline-offset: 2px;
+        transition: text-decoration-color 0.15s ease;
+      }
+
+      .content a:hover {
+        text-decoration-color: var(--fg);
+      }
+
+      .content blockquote {
+        margin-left: 0;
+        padding: 0.5rem 1.1rem;
+        border-left: 3px solid var(--line-strong);
+        color: var(--fg-2);
+      }
+
+      .content code {
+        font-family: var(--font-mono);
+        font-size: 0.84em;
+        background: var(--bg-code);
+        padding: 0.1rem 0.3rem;
+        border-radius: 3px;
+      }
+
+      .content pre {
+        background: var(--bg-code);
+        border-radius: 4px;
+        overflow-x: auto;
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--line);
+      }
+
+      .content pre code {
+        padding: 0;
+        background: none;
+        display: block;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        border-radius: 0;
+      }
+
+      /* ── Tables ── */
+      .content table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+
+      .content th,
+      .content td {
+        padding: 0.5rem 0.65rem;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .content th {
+        font-family: var(--font-sans);
+        font-weight: 500;
+        font-size: 0.82rem;
+        color: var(--fg-3);
+        border-bottom: 2px solid var(--line-strong);
+      }
+
+      .content tbody tr:last-child td {
+        border-bottom: none;
+      }
+
+      .content td code {
+        font-size: 0.8rem;
+      }
+
+      /* ── Figures ── */
+      .content figure {
+        margin-top: 1.6rem;
+      }
+
+      .content figure img,
+      .content figure svg {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .content figcaption {
+        margin-top: 0.5rem;
+        font-size: 0.88rem;
+        color: var(--fg-3);
+        font-style: italic;
+        text-align: center;
+      }
+
+      /* ── Citation ── */
+      .citation-block {
+        margin-top: 0.5rem;
+      }
+
+      .citation-block pre {
+        background: var(--bg-soft);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.8rem 1rem;
+        font-size: 0.78rem;
+        line-height: 1.5;
+        overflow-x: auto;
+      }
+
+      .citation-block pre code {
+        font-family: var(--font-mono);
+        background: none;
+        padding: 0;
+        color: var(--fg-2);
+      }
+
+      /* ── References ── */
+      .references-list {
+        margin-left: 1.4rem;
+        padding: 0;
+        list-style: decimal;
+      }
+
+      .references-list li {
+        margin-bottom: 1rem;
+        font-size: 0.9rem;
+        line-height: 1.65;
+        color: var(--fg-2);
+      }
+
+      .references-list li a {
+        display: inline-block;
+        margin-top: 0.1rem;
+        font-family: var(--font-sans);
+        font-size: 0.82rem;
+        color: var(--fg-3);
+      }
+
+      /* ── Paginator ── */
+      .paginator {
+        max-width: var(--max-content);
+        margin: 2.5rem auto 0;
+        padding-top: 1.2rem;
+        border-top: 1px solid var(--line);
+        display: flex;
+        justify-content: center;
+        gap: 2rem;
+        font-family: var(--font-sans);
+        font-size: 0.88rem;
+      }
+
+      .paginator a {
+        text-decoration: none;
+        color: var(--fg-3);
+        transition: color 0.15s ease;
+      }
+
+      .paginator a:hover {
+        color: var(--fg);
+      }
+
+      /* ── Back to top ── */
+      .back-to-top {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--bg);
+        color: var(--fg-3);
+        border: 1px solid var(--line);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transform: translateY(8px);
+        transition: opacity 0.25s ease, transform 0.25s ease,
+          color 0.15s ease, border-color 0.15s ease;
+        z-index: 100;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .back-to-top.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .back-to-top:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+
+      /* ── Loka logo ── */
+      .loka-logo {
+        display: inline-block;
+        height: 1.15em;
+        width: auto;
+        vertical-align: -0.15em;
+        margin-right: 0.15em;
+      }
+
+      .site-footer .loka-logo {
+        height: 1em;
+        vertical-align: -0.1em;
+      }
+
+      /* ── Footer ── */
+      .site-footer {
+        max-width: var(--max-content);
+        margin: 0 auto;
+        padding: 1.5rem 1.6rem 2rem;
+        font-family: var(--font-sans);
+        font-size: 0.82rem;
+        color: var(--fg-4);
+        text-align: center;
+        border-top: 1px solid var(--line);
+      }
+
+      .site-footer a {
+        color: var(--fg-3);
+        text-decoration: none;
+      }
+
+      .site-footer a:hover {
+        color: var(--fg);
+      }
+
+      /* ── Output comparison ── */
+      .output-comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin: 1.3rem 0;
+      }
+
+      .output-box {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      .output-box-header {
+        font-family: var(--font-sans);
+        font-size: 0.78rem;
+        font-weight: 500;
+        padding: 0.5rem 0.8rem;
+        border-bottom: 1px solid var(--line);
+        background: var(--bg-soft);
+      }
+
+      .output-box-header.good {
+        color: #166534;
+        background: #f0fdf4;
+        border-bottom-color: #bbf7d0;
+      }
+
+      .output-box-header.bad {
+        color: #991b1b;
+        background: #fef2f2;
+        border-bottom-color: #fecaca;
+      }
+
+      .output-box-body {
+        padding: 0.8rem;
+        font-size: 0.82rem;
+        line-height: 1.55;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .output-box-body code {
+        font-size: 0.78rem;
+      }
+
+      /* ── Responsive ── */
+      @media (max-width: 1100px) {
+        .left-toc {
+          display: none;
+        }
+
+        .heading-anchor {
+          display: none;
+        }
+
+        .figure-wide {
+          max-width: var(--max-content);
+          margin-left: 0;
+          margin-right: 0;
+        }
+      }
+
+      @media (max-width: 768px) {
+        body {
+          font-size: 16px;
+        }
+
+        #main.post {
+          padding: 0 1.1rem 3rem;
+        }
+
+        .post-title {
+          font-size: 1.7rem;
+        }
+
+        .byline {
+          font-size: 0.92rem;
+        }
+
+        .resource-links {
+          gap: 1rem;
+          font-size: 0.82rem;
+        }
+
+        .content h2 {
+          font-size: 1.3rem;
+        }
+
+        .callout {
+          padding: 0.7rem 0.9rem;
+        }
+
+        .content table {
+          font-size: 0.8rem;
+        }
+
+        .content th,
+        .content td {
+          padding: 0.4rem 0.45rem;
+        }
+
+        .back-to-top {
+          bottom: 1.2rem;
+          right: 1.2rem;
+        }
+
+        .output-comparison {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* ── Print ── */
+      @media print {
+        .reading-progress,
+        .left-toc,
+        .back-to-top,
+        .paginator {
+          display: none !important;
+        }
+
+        body {
+          font-size: 11pt;
+        }
+
+        .figure-wide {
+          max-width: 100%;
+          margin-left: 0;
+          margin-right: 0;
+        }
+
+        a {
+          color: inherit;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="reading-progress" id="reading-progress"></div>
+    <a id="top"></a>
+    <div class="shell">
+      <main id="main" class="post">
+        <section class="post-heading">
+          <h1 class="post-title">
+            <span class="post-title-main">Post-Training an Open MoE Model to Extract Drug-Protein Relations:</span>
+            <span class="post-title-sub">Trinity-Mini-DrugProt-Think</span>
+          </h1>
+          <div class="authors">
+            <div class="author-card">
+              <span class="author-name"><a href="https://github.com/Shekswess">Bojan Jakimovski</a></span>
+              <span class="author-email"><a href="mailto:bojan.jakimovski@loka.com">bojan.jakimovski@loka.com</a></span>
+            </div>
+            <div class="author-card">
+              <span class="author-name"><a href="https://github.com/petarkalinovski">Petar Kalinovski</a></span>
+              <span class="author-email"><a href="mailto:petar.kalinovski@loka.com">petar.kalinovski@loka.com</a></span>
+            </div>
+          </div>
+	          <div class="author-affiliation">
+	            <a href="https://www.loka.com/" aria-label="Loka">
+	              <img src="https://cdn.worldvectorlogo.com/logos/loka-1.svg" alt="Loka" class="loka-logo" />
+	            </a>
+	          </div>
+          <p class="post-date">
+            <time datetime="2026-02-23">February 23, 2026</time>
+          </p>
+	          <ul class="resource-links">
+		            <li><a href="https://github.com/LokaHQ/Trinity-Mini-DrugProt-Think" aria-label="GitHub"><svg class="icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a></li>
+		            <li><a href="https://huggingface.co/lokahq/Trinity-Mini-DrugProt-Think" aria-label="HuggingFace"><img class="icon" src="https://huggingface.co/front/assets/huggingface_logo-noborder.svg" alt="HuggingFace" /></a></li>
+		            <li><a href="https://medium.com/@jakimovski_bojan/9e1c1c430ce9" aria-label="Deployment guide" title="Deployment guide"><img class="icon" src="https://www.sysgroup.com/wp-content/uploads/2025/02/Amazon_Web_Services-Logo.wine_.png" alt="AWS deployment guide" /></a></li>
+	          </ul>
+	        </section>
+
+	        <figure class="post-cover">
+	          <img
+	            src="assets/logo.png"
+	            alt="Cover image: TRINITY, Trinity-Mini-DrugProt-Think."
+	          />
+	        </figure>
+
+        <article class="content">
+	          <nav class="left-toc" aria-label="Table of contents">
+	            <ul class="toc-list">
+	              <li><a href="#introduction">Introduction</a></li>
+	              <li><a href="#task-model">The task &amp; the model</a></li>
+	              <li><a href="#experiments">Experiments &amp; results</a></li>
+	              <li><a href="#findings">Key findings</a></li>
+	              <li><a href="#next-steps">Next steps</a></li>
+	              <li><a href="#conclusion">Conclusion</a></li>
+	              <li><a href="#acknowledgements">Acknowledgements</a></li>
+	              <li><a href="#citation">Citation</a></li>
+	              <li><a href="#references">Further reading</a></li>
+	            </ul>
+	          </nav>
+
+          <!-- ═══════════════════ 1. INTRODUCTION ═══════════════════ -->
+
+          <h2 id="introduction">
+            Introduction
+            <a class="heading-anchor" href="#introduction" aria-label="Link to section">#</a>
+          </h2>
+
+	          <p>
+	            In the past two years,
+	            Chinese labs have come to dominate open-weight model development in a way that
+	            few in the West anticipated.
+	            <a href="https://www.technologyreview.com/2026/02/12/1132811/whats-next-for-chinese-open-source-ai/">Alibaba&rsquo;s
+	            Qwen family has overtaken Meta&rsquo;s Llama in cumulative Hugging Face downloads</a>,
+	            and by mid-2025 Qwen-derived models accounted for over 40% of new language model
+	            uploads on the platform. <a href="https://arxiv.org/abs/2501.12948">DeepSeek R1</a>
+	            briefly narrowed the frontier gap to
+	            <a href="https://epoch.ai/data-insights/us-vs-china-eci">as little as four months</a>.
+	            <a href="https://huggingface.co/zai-org/GLM-5">GLM-5</a>,
+	            <a href="https://github.com/MoonshotAI/Kimi-K2.5">Kimi K2.5</a>, and
+	            <a href="https://huggingface.co/MiniMaxAI/MiniMax-M2.5">MiniMax M2.5</a>, all
+	            released as open weights under permissive licenses in early 2026, are
+	            <a href="https://www.latent.space/p/ainews-zai-glm-5-new-sota-open-weights">frontier-adjacent
+	            at a fraction of the inference cost</a>. Despite hardware constraints that leave
+	            Chinese labs working around export controls on cutting-edge chips, they have
+	            executed a remarkably effective strategy: flood the world with competitive
+	            open-weight models and let the ecosystem do the rest.
+          </p>
+
+          <p>
+            Western open-source, by contrast, is thin.
+            AI2 ships <a href="https://arxiv.org/abs/2512.13961">OLMo3</a>,
+            Hugging Face has <a href="https://huggingface.co/blog/smollm3">SmolLM3</a>,
+            and Mistral has <a href="https://mistral.ai/">its lineup</a>.
+            Beyond that, the list of Western labs releasing serious open-weight
+            foundation models is short. This is a strange asymmetry: Western labs hold a
+            <a href="https://techblog.comsoc.org/2026/01/27/chinas-open-source-ai-models-to-capture-a-larger-share-of-2026-global-ai-market/">nearly
+            tenfold advantage in compute infrastructure</a> (U.S. hyperscaler capex alone
+            exceeded $400&thinsp;billion in 2025, versus roughly $57&thinsp;billion across
+            China&rsquo;s major platforms), yet produce far fewer open-weight models. China
+            is not winning open-source because of a technical edge in hardware. They are
+            winning because almost nobody in the West is trying.
+          </p>
+
+          <p>
+            That matters because open-weight models are not just a convenience; they are
+            infrastructure. Researchers, startups, and institutions that cannot afford
+            per-token API pricing or cannot send sensitive data to a third-party endpoint
+            depend on models they can run locally. If the only competitive options come from
+            Chinese labs, that shapes who builds what, on whose stack, and on whose terms.
+          </p>
+
+	          <p>
+	            <a href="https://www.arcee.ai">Arcee AI</a> is one of the Western labs taking
+	            this challenge seriously, and the name of their model family gives away exactly
+	            how: <strong>Trinity</strong> is a three-way collaboration.
+	            Arcee AI led the model architecture and training.
+            <a href="https://www.primeintellect.ai">Prime Intellect</a> contributed their
+            distributed training infrastructure, a platform that lets researchers train large models
+            across decentralised GPU clusters without needing a hyperscaler budget.
+            <a href="https://datalogy.ai">Datalogy</a> curated the training data.
+	            Together they released a full family: <strong>Trinity Nano</strong> for
+	            edge and on-device deployment, <strong>Trinity Mini</strong> as the practical mid-range option, and
+	            <strong>Trinity Large</strong> at the frontier scale, competitive with
+	            <a href="https://www.arcee.ai/blog/trinity-large">GLM-4.5 base-to-base</a>.
+	            All three are fully open-weight under a permissive license. We use Trinity Mini
+	            for this study because its sparse MoE keeps inference cost low even when generating
+	            thousands of rollouts per step, which is exactly what RLVR post-training demands.
+	          </p>
+
+	          <p>
+	            The open-weight advantage is not just about what a model scores at release; it is about
+	            what you can build on top of it. Targeted RLVR post-training can unlock domain-specific
+	            capabilities that general benchmarks do not capture, and that is where open-source models
+	            have real room to close the gap. The question we set out to answer is simple:
+	            <strong>Can domain-specific RLVR post-training turn Trinity Mini into a meaningfully better
+	            model for a real workload?</strong>
+	          </p>
+
+          <p>
+            The task we chose is biomedical relation extraction. At
+            <a href="https://loka.com">Loka</a>, healthcare and life sciences projects make
+            up a significant part of our client work, which is part of why this domain
+            appealed to us. Drug discovery, clinical decision support, and pharmacovigilance
+            all depend on extracting structured knowledge from unstructured text. PubMed
+            indexes over 36&thinsp;million citations, and the relationships buried in those
+            abstracts (which drug inhibits which protein, which compound is a substrate for
+            which enzyme) are the raw material for computational pharmacology.
+            <a href="https://biocreative.bioinformatics.udel.edu/tasks/biocreative-vii/track-1/">DrugProt</a>
+            (BioCreative VII) is a benchmark for exactly this: 13 types of drug-protein
+            interactions, annotated on real PubMed abstracts.
+          </p>
+
+	          <p>
+	            The method is <strong>Reinforcement Learning from Verifiable Rewards
+	            (RLVR)</strong>: rather than training a separate reward model, the environment
+	            provides a ground-truth accuracy signal directly (correct label = 1, wrong = 0).
+	            <a href="https://arxiv.org/abs/2402.03300">GRPO (Group Relative Policy
+	            Optimization)</a> makes this tractable by estimating policy gradients from groups of sampled
+	            completions, eliminating the critic network required by
+	            <a href="https://arxiv.org/abs/1707.06347">PPO</a> and
+	            substantially reducing memory overhead.
+	            <a href="https://arxiv.org/abs/2501.12948">DeepSeek R1</a> then demonstrated
+	            at scale that RLVR alone, with no supervised chain-of-thought, can teach models
+	            to reason step by step. We apply the same idea to biomedical relation
+	            classification.
+	          </p>
+
+          <p>
+            Because GRPO generates many rollouts per training step (up to 1,024 completions
+            in our experiments), the dominant cost is inference, not gradient computation.
+            Full post-training a 26B parameter MoE under these conditions is
+            prohibitively expensive: every parameter update must be applied after each batch
+            of thousands of sampled completions, requiring enormous GPU memory and wall-clock
+            time. We therefore use
+            <a href="https://arxiv.org/abs/2106.09685">LoRA (Low-Rank Adaptation)</a>
+            , which inserts small trainable rank
+            decomposition matrices into the frozen base model, reducing trainable parameters
+            by several orders of magnitude while keeping the base weights intact.
+            Crucially, this is not a performance compromise:
+            <a href="https://thinkingmachines.ai/blog/lora/" id="ref-lora-regret-inline-2">LoRA Without Regret</a>
+            shows that LoRA fully matches full post-training in policy
+            gradient RLVR even at rank&nbsp;1, because RLVR absorbs far less information per
+            update than supervised learning. We run the full pipeline on
+            <a href="https://www.primeintellect.ai">Prime Intellect</a>&rsquo;s
+            training infrastructure.
+          </p>
+
+          <p>
+            We ran 12 experiments sweeping LoRA alpha, learning rate, batch size, generation
+            budget, temperature, and rollout count. The question is deliberately practical:
+            <strong>Which hyperparameters actually move the needle</strong> when you RLVR-tune
+            an open-weight sparse MoE for biomedical relation extraction?
+          </p>
+
+          <!-- ═══════════════════ 2. TASK & MODEL ═══════════════════ -->
+
+          <h2 id="task-model">
+            The task &amp; the model
+            <a class="heading-anchor" href="#task-model" aria-label="Link to section">#</a>
+          </h2>
+
+          <h3>DrugProt: the RL environment</h3>
+
+          <p>
+            <a href="https://biocreative.bioinformatics.udel.edu/tasks/biocreative-vii/track-1/">DrugProt</a>
+            (BioCreative VII Track 1) is a corpus of PubMed abstracts annotated with 13 types
+            of drug-protein interactions: INHIBITOR, SUBSTRATE, INDIRECT-DOWNREGULATOR,
+            INDIRECT-UPREGULATOR, AGONIST, ANTAGONIST, ACTIVATOR, PRODUCT-OF, and five others.
+            Given an abstract and a specific (chemical, gene/protein) pair, the model must
+            classify the relationship.
+          </p>
+
+          <p>
+            We use the
+            <a href="https://app.primeintellect.ai/dashboard/environments/maziyar/openmed_drugprot"><code>maziyar/OpenMed_DrugProt@0.3.0</code></a>
+            environment, which frames DrugProt as a <strong>13-way multiple choice question</strong>:
+            each relation type maps to a letter A through M. The model sees the full PubMed abstract,
+            the highlighted entities, and must output its answer inside <code>\boxed{}</code> tags.
+          </p>
+
+          <p>Here is a representative example from the dataset:</p>
+
+          <div class="output-box" style="margin: 0 0 1.3rem;">
+            <div class="output-box-header" style="font-size:0.82rem; font-weight:500; padding:0.5rem 0.8rem; border-bottom:1px solid var(--line); background:var(--bg-soft); font-family:var(--font-sans);">
+              Example input
+            </div>
+            <div class="output-box-body" style="font-size:0.82rem; line-height:1.6;">
+              <p style="margin:0 0 0.6rem;"><strong>Abstract:</strong> Na+/Ca2+ exchange inhibitors: a new class of calcium regulators. The Na(+)/Ca(2+) exchanger (NCX) is a bidirectional transporter that normally extrudes Ca(2+) from the cell (forward mode), but also brings Ca(2+) into the cell (reverse mode) under special conditions such as intracellular Na(+) accumulation or membrane depolarization. There are three mammalian NCX isoforms: NCX1 is widely expressed in the heart, kidney, brain, blood vessels, and so on; whereas the expression of NCX2 and NCX3 is limited mainly to the brain and skeletal muscle. [&hellip;]</p>
+              <p style="margin:0 0 0.6rem;"><strong>Drug/Chemical:</strong> <code>Ca(2+)</code> &nbsp;&nbsp; <strong>Gene/Protein:</strong> <code>Na(+)/Ca(2+) exchanger</code></p>
+              <p style="margin:0 0 0.6rem;"><strong>Question:</strong> What is the relation type between <code>Ca(2+)</code> and <code>Na(+)/Ca(2+) exchanger</code>?</p>
+              <p style="margin:0;"><strong>Options:</strong> A. INDIRECT-DOWNREGULATOR &nbsp; B. INDIRECT-UPREGULATOR &nbsp; C. DIRECT-REGULATOR &nbsp; D. ACTIVATOR &nbsp; E. INHIBITOR &nbsp; F. AGONIST &nbsp; G. AGONIST-ACTIVATOR &nbsp; H. AGONIST-INHIBITOR &nbsp; I. ANTAGONIST &nbsp; J. PRODUCT-OF &nbsp; <strong>K. SUBSTRATE</strong> &nbsp; L. SUBSTRATE_PRODUCT-OF &nbsp; M. PART-OF</p>
+            </div>
+            <div class="output-box-header good" style="font-size:0.82rem;">
+              Correct answer: K &mdash; SUBSTRATE (Ca(2+) is transported by the NCX, making it a substrate of the exchanger)
+            </div>
+          </div>
+
+          <h3>Reward structure</h3>
+
+          <p>
+            The environment defines a composite reward with three components:
+          </p>
+
+          <pre><code>reward = 0.70 * accuracy + 0.20 * reasoning + 0.10 * format</code></pre>
+
+          <ul>
+            <li>
+              <strong>Accuracy (weight: 0.70):</strong> Binary, 1.0 if the boxed letter
+              matches the gold label, 0.0 otherwise. This is the signal that matters.
+            </li>
+            <li>
+              <strong>Reasoning (weight: 0.20):</strong> Heuristic score composed of three
+              components: (1) length of the <code>&lt;think&gt;&lt;/think&gt;</code> block
+              (0.1&ndash;0.4 depending on whether it exceeds 100 / 200 / 400 characters),
+              (2) keyword density from a fixed list of 37 biomedical terms — agonist,
+              inhibit, substrate, kinase, transporter, etc. — capped at 0.3, and
+              (3) presence of the words &ldquo;chemical&rdquo; or &ldquo;drug&rdquo;
+              (+0.1) and &ldquo;protein&rdquo; or &ldquo;gene&rdquo; (+0.1).
+              Crucially, this reward is <strong>task-agnostic</strong>: it does not check
+              whether the reasoning is correct or relevant to the specific entity pair.
+              A model writing generic biomedical prose scores well regardless of whether
+              its analysis of <em>this</em> relationship is right. This explains why
+              reasoning reward improves similarly across all alpha values — it measures
+              format and vocabulary, not depth of analysis. It also makes the reasoning
+              component the noisiest of the three signals.
+            </li>
+            <li>
+              <strong>Format (weight: 0.10):</strong> Binary, 1.0 if the output contains
+              a valid <code>\boxed{A..M}</code>, 0.0 otherwise.
+            </li>
+          </ul>
+
+          <p>
+            This structure is intentional: accuracy dominates, but the shaping signals from
+            reasoning and format help bootstrap learning in early steps when the model has not
+            yet learned the task. A practical consequence: total reward can improve early via
+            format compliance and longer reasoning traces before accuracy actually moves.
+          </p>
+
+          <h3>The model: Arcee Trinity Mini</h3>
+
+          <p>
+            <a href="https://www.arxiv.org/pdf/2602.17004">Trinity Mini</a> is a sparse
+            mixture-of-experts (MoE) model from Arcee AI: 26B total parameters,
+            3B active per forward pass. Sparse MoE is a natural fit for RLVR post-training
+            because GRPO is dominated by forward passes. With
+            <code>batch_size=128</code> and <code>rollouts_per_example=8</code>, each training
+            step generates 1,024 sampled completions. A model that is cheap at inference time
+            but has high total capacity is exactly what you want.
+          </p>
+
+	          <p>
+	            We adapt Trinity Mini using
+	            <a href="https://arxiv.org/abs/2106.09685">LoRA (Low-Rank Adaptation)</a>. 
+	            LoRA freezes the base model and learns two low-rank matrices <em>A</em> and
+	            <em>B</em> per targeted layer (rank <em>r</em>), scaled by <em>&alpha;</em>.
+	          </p>
+
+	          <div class="equation" aria-label="LoRA update equation">
+	            <span class="equation-inner">
+	              &Delta;<em>W</em> = (<em>&alpha;</em>/<em>r</em>) &middot; <em>B</em><em>A</em>
+	            </span>
+	          </div>
+
+	          <p>
+	            The key hyperparameter we ablate is <strong>&alpha;</strong>: it controls how
+	            much the LoRA updates influence the model&rsquo;s outputs independently of the
+	            number of trainable parameters. Higher &alpha; means stronger adaptation per
+	            step; lower &alpha; is more conservative. Note that &alpha; acts as a multiplier
+	            on the effective learning rate for the adapter layers; raising &alpha; and
+	            raising the global LR have similar effects on training dynamics.
+	          </p>
+
+          <div class="callout">
+            <p>
+              <strong>Important Distinction:</strong> We sweep LoRA <em>alpha</em> (the
+              scaling factor), not LoRA <em>rank</em>. Alpha controls update magnitude without
+              changing the number of trainable parameters. This makes it a pure &ldquo;how
+              aggressively do we adapt?&rdquo; knob.
+            </p>
+          </div>
+
+          <!-- ═══════════════════ 3. EXPERIMENTS ═══════════════════ -->
+
+          <h2 id="experiments">
+            Experiments &amp; results
+            <a class="heading-anchor" href="#experiments" aria-label="Link to section">#</a>
+          </h2>
+
+          <p>
+            Our ablation strategy is sequential. We sweep one variable at a time, lock in the
+            best setting, and move to the next. This gives us a clear cause-and-effect story
+            at the cost of not exploring the full combinatorial space. For each comparison we
+            show learning curves (accuracy reward over training steps) with a 5-step moving
+            average for readability, plus snapshot bar charts at key steps.
+          </p>
+
+          <p>
+            One parameter we did not sweep is LoRA rank. Prime Intellect&rsquo;s training
+            infrastructure fixes rank at <code>r=16</code>, applied across all projection
+            layers (<code>q_proj</code>, <code>k_proj</code>, <code>v_proj</code>,
+            <code>o_proj</code>, <code>gate_proj</code>, <code>up_proj</code>,
+            <code>down_proj</code>, and expert layers). We are comfortable leaving rank
+            fixed because
+            <a href="https://thinkingmachines.ai/blog/lora/" id="ref-lora-regret-inline">LoRA Without Regret</a>
+            establishes that policy gradient algorithms absorb roughly
+            one bit of information per episode independent of model size, meaning a
+            rank-1 LoRA (3M parameters for an 8B model) vastly exceeds the
+            capacity needed for typical RL training sets. Rank is therefore not the binding
+            constraint in our setting. The same work also demonstrates that applying LoRA to
+            all layers (attention <em>and</em> MLPs) substantially outperforms
+            attention-only LoRA &mdash; a finding consistent with our all-layer setup.
+            On Trinity Mini this is especially relevant: the model&rsquo;s G1 gated
+            attention uses a dedicated <code>gate_proj</code> weight matrix in every
+            attention layer that is both a LoRA target and architecturally load-bearing
+            (it controls attention output magnitudes via a learned sigmoid gate), so
+            leaving it frozen would mean skipping a significant set of parameters.
+          </p>
+
+          <details open style="margin: 0 0 1.3rem;">
+            <summary style="cursor: pointer; font-family: var(--font-sans); font-size: 0.88rem; color: var(--fg-3); user-select: none; padding: 0.4rem 0;">
+              All 12 experiments (click to expand)
+            </summary>
+            <p style="margin: 0.7rem 0 0.6rem; font-size: 0.9rem;">
+              Unless noted otherwise, defaults are:
+              <code>batch_size=128</code>, <code>rollouts_per_example=8</code>,
+              <code>temperature=0.7</code>, <code>max_tokens=512</code>.
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Run</th>
+                  <th>&alpha;</th>
+                  <th>LR</th>
+                  <th>Batch</th>
+                  <th>Rollouts</th>
+                  <th>Max tokens</th>
+                  <th>Temp</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>w1-alpha16-baseline</code></td><td>16</td><td>1e-6</td><td>128</td><td>8</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha32-baseline</code></td><td>32</td><td>1e-6</td><td>128</td><td>8</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha64-baseline</code></td><td>64</td><td>1e-6</td><td>128</td><td>8</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha128-baseline</code></td><td>128</td><td>1e-6</td><td>128</td><td>8</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha64-lr1e-5</code></td><td>64</td><td>1e-5</td><td>128</td><td>8</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha64-lr5e-6</code></td><td>64</td><td>5e-6</td><td>128</td><td>8</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha64-lr3e-6</code></td><td>64</td><td>3e-6</td><td>128</td><td>8</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha64-lr3e-6-b64-r16</code></td><td>64</td><td>3e-6</td><td>64</td><td>16</td><td>512</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha64-lr3e-6-1024</code></td><td>64</td><td>3e-6</td><td>128</td><td>8</td><td>1024</td><td>0.7</td></tr>
+                <tr><td><code>w1-alpha64-lr3e-6-2048</code></td><td>64</td><td>3e-6</td><td>128</td><td>8</td><td>2048</td><td>0.7</td></tr>
+                <tr><td><code>w2-2048-t0.15</code></td><td>64</td><td>3e-6</td><td>128</td><td>8</td><td>2048</td><td>0.15</td></tr>
+                <tr><td><code>w2-2048-r4</code></td><td>64</td><td>3e-6</td><td>128</td><td>4</td><td>2048</td><td>0.7</td></tr>
+              </tbody>
+            </table>
+          </details>
+
+          <!-- ── 3.1 Alpha ── -->
+
+          <h3 id="exp-alpha">1) LoRA alpha ablation (16 / 32 / 64 / 128)</h3>
+
+          <p>
+            We started with the most fundamental LoRA knob: the alpha scaling factor.
+            Keeping everything else fixed (LR&nbsp;1e-6, batch&nbsp;128, rollouts&nbsp;8,
+            max_tokens&nbsp;512), we trained four runs at &alpha;=16, &alpha;=32, &alpha;=64,
+            and &alpha;=128. The general picture is clear: up to &alpha;=64, higher alpha
+            produces both faster learning and higher accuracy. &alpha;=64 is the best
+            overall setting, reaching ~0.75 accuracy reward at step&nbsp;100 versus ~0.70
+            for &alpha;=32 and ~0.41 for &alpha;=16.
+          </p>
+
+          <figure class="figure-wide">
+            <canvas id="chart-alpha-curves" height="300"></canvas>
+            <figcaption>
+              Figure 1. LoRA alpha sweep (steps 1&ndash;100). Accuracy reward vs training
+              step for &alpha;=16, 32, 64, and 128, all at LR&nbsp;1e-6. &alpha;=128
+              is terminated at step&nbsp;70 due to eval degradation.
+            </figcaption>
+          </figure>
+
+          <p>
+            The exception is &alpha;=128. On the training metric it looks competitive
+            , even outperforming &alpha;=64 at matching steps, but the
+            held-out eval tells the opposite story. Figure&nbsp;2 makes this impossible
+            to miss: &alpha;=128 started with the highest eval score of any run and ended
+            with the lowest, dropping steadily from step&nbsp;0. The model was terminated
+            at step&nbsp;70. Training reward is healthy because aggressive updates adapt
+            quickly to each batch; the eval exposes that generalization is collapsing at
+            the same rate.
+          </p>
+
+          <figure class="figure-wide">
+            <canvas id="chart-alpha-eval" height="260"></canvas>
+            <figcaption>
+              Figure 2. Held-out eval score (<code>avg@2</code>) over training steps for
+              each LoRA alpha. &alpha;=64 climbs steadily; &alpha;=128 declines from the
+              very first checkpoint and is terminated at step&nbsp;70. &alpha;=16 and
+              &alpha;=32 stay roughly flat.
+            </figcaption>
+          </figure>
+
+          <figure class="figure-wide">
+            <canvas id="chart-alpha-reasoning" height="260"></canvas>
+            <figcaption>
+              Figure 3. Reasoning reward by LoRA alpha (steps 1&ndash;100). Unlike
+              accuracy, reasoning reward improves similarly across all alphas. The
+              model learns to produce structured thinking traces regardless of update
+              magnitude.
+            </figcaption>
+          </figure>
+
+          <p>
+            Reasoning reward tells a different story from accuracy. While &alpha;=64
+            clearly outperforms &alpha;=16 on accuracy, all four alphas produce similarly
+            improving reasoning traces over time. The model learns to write structured
+            pharmacological analysis regardless of how aggressively the LoRA layers are
+            being updated. This suggests that reasoning quality, as measured by our
+            heuristic, is more about training duration than update magnitude, a
+            contrast worth keeping in mind when interpreting the max tokens results below.
+          </p>
+
+          <p>
+            Alpha is not a dial where higher is always better. The LoRA scaling factor is
+            <code>&alpha;&nbsp;/&nbsp;rank</code>, so a higher alpha directly amplifies the
+            magnitude of every adapter update — effectively inflating the learning rate for
+            the LoRA layers independently of the global LR. The consequences are threefold.
+            First, the adapted weights receive disproportionately large updates, producing
+            loss spikes and erratic training dynamics. Second,
+            the model overfits aggressively to each batch: training accuracy climbs fast,
+            but the pretrained feature space gets warped at the same rate, eroding the
+            general capabilities inherited from pretraining. Third, and most visible in
+            Figure&nbsp;3, generalization collapses on held-out data while the training
+            signal stays deceptively healthy.
+          </p>
+
+          <p>
+            The key practical insight is that alpha and learning rate are not independent
+            knobs: raising alpha has the same effect as raising the LR for the adapter
+            layers. If instability appears, lowering either will help. &alpha;=64 sat in
+            the stable, productive middle of our sweep, and we locked it in for all
+            subsequent experiments.
+          </p>
+
+          <!-- ── 3.2 Learning Rate ── -->
+
+          <h3 id="exp-lr">2) Learning rate sweep at &alpha;=64 (1e-5 / 1e-6 / 3e-6 / 5e-6)</h3>
+
+          <p>
+            With alpha fixed at 64, we swept the learning rate across four values:
+            1e-6 (our alpha baseline), 3e-6, 5e-6, and the aggressive 1e-5. This
+            is where the story gets interesting.
+          </p>
+
+          <p>
+            The three moderate learning rates (1e-6, 3e-6, 5e-6) all produced healthy
+            learning curves with different speed/stability tradeoffs. 5e-6 learned fastest
+            early on. 3e-6 was steady and reliable. 1e-6 was conservative but safe.
+          </p>
+
+          <p>
+            <strong>1e-5, however, was catastrophic.</strong> The run started promisingly; it
+            actually climbed faster than the others in the first 20 steps. But by step&nbsp;50
+            the reward began oscillating wildly, and by step&nbsp;77 accuracy collapsed to
+            zero. The run was terminated at step&nbsp;82 with no recovery in sight. This is
+            not a gradual degradation; it is a cliff. The model essentially forgot how to
+            produce valid outputs.
+          </p>
+
+          <figure class="figure-wide">
+            <canvas id="chart-lr-curves" height="300"></canvas>
+            <figcaption>
+              Figure 4. Learning rate sweep at &alpha;=64 (steps 1&ndash;100). The 1e-5 run
+              (red) climbs early but collapses catastrophically around step 50&ndash;77. The
+              remaining three learning rates show the classic speed-vs-stability tradeoff.
+            </figcaption>
+          </figure>
+
+          <figure class="figure-wide">
+            <canvas id="chart-lr-snapshot" height="260"></canvas>
+            <figcaption>
+              Figure 5. Accuracy reward at step 82 vs learning rate (log scale). The cliff
+              between 5e-6 and 1e-5 is dramatic: a 2&times; increase in LR produces
+              a collapse from ~0.83 to near zero.
+            </figcaption>
+          </figure>
+
+          <div class="callout">
+            <p>
+              <strong>Why 1e-5 collapses and what LoRA Without Regret says about it:</strong>
+              <a href="https://thinkingmachines.ai/blog/lora/">LoRA Without Regret</a>
+              finds that the optimal LoRA learning rate is roughly
+              <strong>10&times; the optimal full post-training LR</strong> across a wide
+              range of models and tasks (15&times; for short runs of ~100 steps). On first
+              reading, this suggests we should be running at 1e-5 or higher. So why did
+              1e-5 destroy our model?
+            </p>
+            <p>
+              The key is the interaction between LR and &alpha;. LoRA&rsquo;s weight update
+              is &Delta;W&nbsp;=&nbsp;(&alpha;/r)&middot;BA. At &alpha;=64, r=16 the
+              scaling factor is 4; at the &alpha;=32 used in LoRA Without Regret it is 2.
+              Our effective per-step update magnitude at LR&nbsp;1e-5 is therefore
+              equivalent to running at LR&nbsp;2e-5 under their parameterization,
+              already at the edge of their reported stability range. Additionally, LoRA
+              Without Regret&rsquo;s experiments use dense Llama-class architectures; sparse
+              MoE models route tokens through only a subset of experts per forward pass,
+              which can amplify gradient variance and narrow the stable LR window further.
+              The collapse at 1e-5 is therefore consistent with the theory once the
+              &alpha;-scaling and MoE architecture are both accounted for: we were above
+              the stability boundary for <em>this specific combination</em> of adapter
+              scaling and model class.
+            </p>
+            <p>
+              Two Trinity Mini-specific factors are worth flagging. First, Trinity Mini
+              was pre-trained with <a href="https://arxiv.org/abs/2203.03466">&mu;P</a> input
+              scaling (embedding outputs multiplied by &radic;2048&nbsp;&asymp;&nbsp;45 before
+              each transformer layer), a different pre-training regime from the standard
+              architectures used in LoRA
+              Without Regret&rsquo;s experiments; their empirical LR bounds were not
+              established under equivalent conditions. Second, MoE models face a
+              documented instability problem under GRPO specifically: top-k discrete
+              routing causes the set of activated experts to drift between inference and
+              training, <a href="https://arxiv.org/abs/2510.23027">inflating importance-sampling
+              variance</a> in a way that dense models do not experience.
+              These two factors make empirical LR validation more important here than on
+              a standard dense model.
+            </p>
+            <p>
+              The practical takeaway: when porting the LoRA Without Regret 10&times; rule
+              to a new setup, adjust for your actual &alpha;/r ratio and verify stability
+              empirically at the high end before committing to a full run.
+            </p>
+          </div>
+
+          <p>
+            At step&nbsp;82 (the last step before 1e-5 data disappears): 5e-6 leads with
+            0.83 accuracy, followed by 3e-6 at 0.72, 1e-6 at 0.70, and 1e-5 at 0.00.
+            However, 5e-6 showed signs of instability in later steps. We chose
+            <strong>3e-6</strong> as the safest default that still converges quickly.
+          </p>
+
+          <!-- ── 3.3 Batch Size ── -->
+
+          <h3 id="exp-batch">3) Batch size: 128&times;8 vs 64&times;16</h3>
+
+          <p>
+            Next we tested whether the same total completions per step (1,024) should come
+            from more examples with fewer rollouts or fewer examples with more rollouts.
+            We compared our default (<code>batch=128, rollouts=8</code>) against
+            (<code>batch=64, rollouts=16</code>), both at &alpha;=64, LR&nbsp;3e-6.
+          </p>
+
+          <figure class="figure-wide">
+            <canvas id="chart-batch-curves" height="300"></canvas>
+            <figcaption>
+              Figure 6. Batch size comparison (steps 1&ndash;100). Accuracy reward for
+              128&times;8 (more examples, fewer rollouts) vs 64&times;16 (fewer examples,
+              more rollouts per example).
+            </figcaption>
+          </figure>
+
+          <p>
+            The two configurations performed comparably. At step&nbsp;100, accuracy was
+            ~0.74 for 128&times;8 and ~0.75 for 64&times;16. The key difference was cost:
+            64&times;16 generated notably longer completions on average (~222 vs ~167
+            tokens), meaning more inference compute per step for similar accuracy. We kept
+            <strong>128&times;8</strong> as the default.
+          </p>
+
+          <!-- ── 3.4 Max Tokens ── -->
+
+          <h3 id="exp-maxtokens">4) Max generation tokens (512 / 1024 / 2048)</h3>
+
+          <p>
+            With &alpha;=64, LR&nbsp;3e-6, and batch 128&times;8 locked in, we swept the
+            maximum generation length. This knob changes both compute cost and the model&rsquo;s
+            behavior, as longer caps allow more elaborate reasoning traces.
+          </p>
+
+          <figure class="figure-wide">
+            <canvas id="chart-maxtokens-curves" height="300"></canvas>
+            <figcaption>
+              Figure 7. Max tokens sweep (steps 1&ndash;100). Accuracy reward for 512, 1024,
+              and 2048 max tokens, all at &alpha;=64, LR&nbsp;3e-6, batch 128&times;8.
+            </figcaption>
+          </figure>
+
+          <figure class="figure-wide">
+            <canvas id="chart-maxtokens-snapshot" height="260"></canvas>
+            <figcaption>
+              Figure 8. Mean composite reward at step 100 by max tokens. 2048 achieves the
+              highest overall reward, driven by both accuracy and richer reasoning traces.
+            </figcaption>
+          </figure>
+
+          <figure class="figure-wide">
+            <canvas id="chart-maxtokens-reasoning" height="260"></canvas>
+            <figcaption>
+              Figure 9. Reasoning reward by max tokens (steps 1&ndash;100). The gap is
+              structural and visible from step&nbsp;1: 2048 tokens starts at ~0.87,
+              1024 at ~0.81, and 512 at ~0.62, before any learning has occurred.
+              The reasoning heuristic rewards think blocks of 400+ characters, which a
+              512-token budget cannot reliably accommodate alongside the answer.
+            </figcaption>
+          </figure>
+
+          <p>
+            The 2048 configuration stood out as the strongest overall performer, and
+            Figure&nbsp;9 makes the mechanism explicit. This is not a learned behaviour; it is a structural constraint. With 512 max tokens, the model must
+            fit both its reasoning trace and its boxed answer into a tight budget; reliably
+            hitting the 400+ character threshold for the reasoning reward becomes
+            structurally difficult. With 2048 tokens, the model has room to reason from
+            step&nbsp;1, and that head-start compounds throughout training. Since reasoning
+            carries a 0.20 weight in the composite reward, the advantage is immediate and
+            persistent.
+          </p>
+
+          <p>
+            The cost, however, is real: at step&nbsp;100, mean completion length is ~167
+            tokens at 512, ~334 at 1024, and ~605 at 2048. That is a 3.6&times; increase in
+            inference tokens per completion. We treat <strong>2048</strong> as the quality
+            setting for the final ablations.
+          </p>
+
+          <!-- ── 3.5 Final Probes ── -->
+
+          <h3 id="exp-final">5) Final ablations: temperature and rollout budget</h3>
+
+          <p>
+            Our final two experiments started from the best configuration found so far
+            (&alpha;=64, LR&nbsp;3e-6, batch&nbsp;128, max_tokens&nbsp;2048) and probed
+            two remaining knobs:
+          </p>
+
+          <ul>
+            <li>
+              <strong>Temperature 0.15:</strong> Does lower sampling entropy improve
+              accuracy by concentrating probability on the model&rsquo;s best guesses?
+            </li>
+            <li>
+              <strong>Rollout 4:</strong> Can we halve the rollout budget (and thus
+              inference cost) per step without losing accuracy?
+            </li>
+          </ul>
+
+          <figure class="figure-wide">
+            <canvas id="chart-final-curves" height="300"></canvas>
+            <figcaption>
+              Figure 10. Final ablations (steps 1&ndash;100). Accuracy reward for the 2048
+              baseline, the low-temperature variant (t=0.15), and the reduced-rollout variant
+              (r=4).
+            </figcaption>
+          </figure>
+
+          <p>
+            The rollout=4 variant matched or exceeded the baseline&rsquo;s accuracy
+            throughout training, suggesting that for this task, 4 rollouts per example
+            provide sufficient signal for GRPO updates. This is significant because it
+            halves inference cost per training step.
+          </p>
+
+          <p>
+            The low-temperature variant (t=0.15) told a more nuanced story. It started
+            with very high accuracy in early steps (the model&rsquo;s existing knowledge,
+            sampled deterministically, was already decent). But over the course of training,
+            the reduced exploration appeared to limit improvement. Lower temperature means
+            less diversity in rollouts, which means less informative gradient signal for GRPO.
+          </p>
+
+          <!-- ═══════════════════ 4. KEY FINDINGS ═══════════════════ -->
+
+          <h2 id="findings">
+            Key findings &amp; best configuration
+            <a class="heading-anchor" href="#findings" aria-label="Link to section">#</a>
+          </h2>
+
+          <p>
+            After 12 experiments, here is what we learned:
+          </p>
+
+          <p>
+            <strong>1. LoRA alpha is the single most important knob.</strong>
+            The difference between &alpha;=16 and &alpha;=64 was larger than any other
+            hyperparameter change we tested. This is not about adding more parameters (rank
+            was fixed); it is purely about update magnitude. If you are running LoRA
+            with RLVR, tune alpha before anything else.
+          </p>
+
+          <p>
+            <strong>2. Learning rate 1e-5 is a hard boundary for LoRA + RLVR.</strong>
+            The collapse is not gradual. The model goes from learning to producing garbage
+            within ~30 steps. This is a direct consequence of LoRA&rsquo;s alpha-scaled
+            updates interacting with GRPO&rsquo;s policy gradient: when the effective step
+            size is too large, the policy moves so far from the reference that the KL penalty
+            cannot recover. Anyone running RLVR with LoRA adapters should treat 1e-5 as a
+            red line, not a starting point.
+          </p>
+
+          <p>
+            <strong>3. More thinking room helps, but you pay for it.</strong>
+            Going from 512 to 2048 max tokens improved composite reward meaningfully. The
+            model produced richer, more pharmacologically grounded reasoning. But completion
+            length tripled, and the accuracy gains themselves were noisy. The right framing is:
+            max_tokens is a cost-quality dial, not a free lunch.
+          </p>
+
+          <p>
+            <strong>4. You can cut rollouts without losing accuracy.</strong>
+            The rollout=4 experiment was our most practically useful finding. Halving rollouts
+            per example halves inference cost per training step, and on this task the model
+            maintained strong accuracy. This suggests that for well-structured classification
+            tasks with clear reward signals, you do not need 8 rollouts to get good GRPO
+            gradients.
+          </p>
+
+          <p>
+            <strong>5. Low temperature hurts RLVR exploration.</strong>
+            Temperature 0.15 gave a strong start (the model&rsquo;s existing knowledge was
+            sampled more deterministically) but underperformed over the full 100 steps. RLVR
+            needs diversity in rollouts to compute meaningful advantages. Squeezing exploration
+            too early is counterproductive.
+          </p>
+
+          <div class="callout">
+            <p>
+              <strong>Best configuration:</strong>
+              &alpha;=64, LR&nbsp;3e-6, batch&nbsp;128, rollouts&nbsp;8 (or 4 for cost
+              savings), max_tokens&nbsp;2048, temperature&nbsp;0.7.
+              This combination produced the highest overall reward and maintained stable
+              learning throughout training.
+            </p>
+          </div>
+
+          <h3>The output contrast: best model vs catastrophic 1e-5</h3>
+
+          <p>
+            To make the impact concrete, here is a side-by-side comparison of model outputs
+            on the same DrugProt example. The best configuration produces structured
+            pharmacological reasoning; the collapsed 1e-5 model produces incoherent output.
+          </p>
+
+          <!-- ── model output comparison ── -->
+          <div class="output-comparison">
+            <div class="output-box">
+              <div class="output-box-header good">Best model (&alpha;=64, lr=3e-6, 2048 tokens)</div>
+              <div class="output-box-body">
+                <code>&lt;think&gt;</code><br/>
+                The user is asking about the relation between &ldquo;Ser&rdquo; (serine, an amino acid) and
+                &ldquo;GXSXG motif&rdquo; (a conserved sequence motif in proteins). The options are
+                various types of interactions.<br/><br/>
+                Key points from the biomedical text: Calnuc is a serine protease, and the text
+                mentions &ldquo;Ser-378 of GXSXG motif&rdquo;. This indicates that serine (Ser) is part
+                of the GXSXG motif, specifically at position 378. The GXSXG motif is a catalytic
+                motif in serine proteases, where serine acts as the catalytic residue. The text
+                states that calnuc has two Zn&sup2;&thinsp;&plus;-binding sites and is inactive as a peptidase.
+                Zn&sup2;&thinsp;&plus; binding negatively regulates serine protease activity by causing a
+                conformational change. G protein &alpha; subunit also inhibits enzymatic activity.<br/><br/>
+                Analyzing the options: A&ndash;I are about regulation (inhibition, activation, etc.),
+                but the relationship here is that Ser is part of the motif, not regulating it.
+                J&ndash;M are about the chemical&rsquo;s role in relation to an enzyme&rsquo;s process.
+                M is PART-OF, which fits because Ser is a component of the GXSXG motif. Other
+                options don&rsquo;t fit: J&ndash;L are about the chemical being a product, substrate,
+                or both; A&ndash;I are about regulation. Ser here is a residue in a protein motif,
+                not a product, substrate, or external regulator.<br/><br/>
+                Final answer: M.
+                <code>&lt;/think&gt;</code><br/><br/>
+                The text explicitly states that Ser-378 is part of the GXSXG motif in calnuc.
+                Serine is a component residue within the motif, making it a structural constituent
+                rather than an external regulator or product/substrate.<br/><br/>
+                <code>\boxed{M}</code>
+              </div>
+            </div>
+            <div class="output-box">
+              <div class="output-box-header bad">Collapsed model (lr=1e-5, step ~80)</div>
+              <div class="output-box-body">
+                <code>&lt;think&gt;</code><br/>
+                the the the the the the the the the the the the the the the
+                the the the the the the the the the the the the the the the
+                the the the the the the the the the the the the the the the
+                <code>&lt;/think&gt;</code><br/><br/>
+                <code>\boxed{A}</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══════════════════ 5. NEXT STEPS ═══════════════════ -->
+
+          <h2 id="next-steps">
+            Next steps
+            <a class="heading-anchor" href="#next-steps" aria-label="Link to section">#</a>
+          </h2>
+
+          <ul>
+            <li>
+              <strong>Longer training runs.</strong> Our best configuration (&alpha;=64,
+              LR&nbsp;3e-6, 2048 tokens) was capped at ~100 steps and its eval curve had
+              not flattened. Running it for 500+ steps is the clearest path to a stronger
+              model, though diminishing returns and eval divergence both remain risks.
+            </li>
+            <li>
+              <strong>Evaluation on the official DrugProt test set.</strong> Our held-out
+              metric (<code>avg@2</code>) is computed on the training split during RLVR. A
+              proper evaluation on the official test set would tell us whether the gains
+              reflect genuine generalization or a more narrow adaptation to the training
+              distribution.
+            </li>
+            <li>
+              <strong>Trying different base models.</strong> Trinity Mini is one choice.
+              Running the same ablation protocol on other open-weight models would reveal
+              whether the alpha and LR sensitivities we found are MoE-specific or general
+              properties of LoRA under RLVR.
+            </li>
+            <li>
+              <strong>Better reward signals.</strong> The reasoning reward is heuristic
+              (keyword matching and length thresholds). Replacing it with a learned reward
+              model or NLI-based evaluation could change the learning dynamics substantially,
+              especially for the reasoning component which was the noisiest signal.
+            </li>
+          </ul>
+
+          <!-- ═══════════════════ 6. CONCLUSION ═══════════════════ -->
+
+	          <h2 id="conclusion">
+	            Conclusion
+	            <a class="heading-anchor" href="#conclusion" aria-label="Link to section">#</a>
+	          </h2>
+
+          <p>
+            The recipe works. &alpha;=64, LR&nbsp;3e-6, 2048 max tokens: a 3B-active-parameter
+            open-weight MoE that learns to reason about drug-protein interactions from reward
+            signals alone, no labeled chain-of-thought required. The leverage is almost
+            entirely in two numbers; everything else is secondary.
+          </p>
+
+	          <p>
+	            If you want to use the fine-tuned model, you do not need to re-run the training.
+		            We have published the adapter weights (<a href="https://huggingface.co/lokahq/Trinity-Mini-DrugProt-Think"><strong>lokahq/Trinity-Mini-DrugProt-Think</strong></a>) and written a step-by-step deployment guide
+	            using the <strong>AWS SageMaker SDK v3</strong>, covering how to serve the merged
+	            model as a real-time endpoint:
+	            <a href="https://medium.com/@jakimovski_bojan/9e1c1c430ce9">deployment guide</a>.
+	            SageMaker&rsquo;s managed inference handles scaling and hardware allocation;
+	            the guide walks through container selection, endpoint configuration, and a
+            sample inference call against the DrugProt relation types.
+          </p>
+
+	          <p>
+	            We have also started running the same RLVR+LoRA recipe on
+	            <strong>Trinity Nano</strong> (6B parameters), across both medical and
+	            general reasoning tasks. Nano is small enough to serve cheaply on a single GPU
+	            instance, which matters for inference in production use cases. We expect the same
+	            hyperparameter sensitivities to hold; we will publish a follow-up when we have
+	            results worth sharing.
+	          </p>
+
+	          <!-- ═══════════════════ 7. ACKNOWLEDGEMENTS ═══════════════════ -->
+	
+	          <h2 id="acknowledgements">
+	            Acknowledgements
+	            <a class="heading-anchor" href="#acknowledgements" aria-label="Link to section">#</a>
+	          </h2>
+	
+	          <ul>
+	            <li>
+	              <strong>Model:</strong> <a href="https://www.arcee.ai">Arcee AI</a> (with <a href="https://www.primeintellect.ai">Prime Intellect</a> and <a href="https://datalogy.ai">Datalogy</a>) for releasing the Trinity family.
+	            </li>
+	            <li>
+	              <strong>Training:</strong> <a href="https://www.primeintellect.ai">Prime Intellect</a> for hosted training infrastructure.
+	            </li>
+	            <li>
+	              <strong>Environment:</strong> <a href="https://huggingface.co/datasets/OpenMed/drugprot-parquet">OpenMed</a> for DrugProt dataset packaging.
+	            </li>
+	            <li>
+	              <strong>Deployment:</strong> <a href="https://aws.amazon.com/">AWS</a> for deployment and hosting.
+	            </li>
+	          </ul>
+
+	          <!-- ═══════════════════ CITATION ═══════════════════ -->
+
+	          <h2 id="citation">
+	            Citation
+	            <a class="heading-anchor" href="#citation" aria-label="Link to section">#</a>
+          </h2>
+
+          <p>If you find this work useful, please cite:</p>
+
+	          <div class="citation-block">
+	            <pre><code>@misc{jakimovski2026drugprotrl,
+  title        = {Post-Training an Open MoE Model to Extract Drug-Protein Relations: Trinity-Mini-DrugProt-Think},
+  author       = {Jakimovski, Bojan and Kalinovski, Petar},
+  year         = {2026},
+  month        = feb,
+  howpublished = {Blog post},
+	  url          = {https://github.com/LokaHQ/Trinity-Mini-DrugProt-Think}
+}</code></pre>
+		          </div>
+
+          <!-- ═══════════════════ REFERENCES ═══════════════════ -->
+
+	          <h2 id="references">
+	            Further reading
+	            <a class="heading-anchor" href="#references" aria-label="Link to section">#</a>
+	          </h2>
+
+	          <ol class="references-list">
+            <li id="ref-mit-chinese-oss">
+              MIT Technology Review (2026).
+              <em>What&rsquo;s next for Chinese open-source AI.</em>
+              Reports Qwen overtaking Llama in Hugging Face downloads and
+              Qwen-derived models reaching 40%+ of new language model uploads.
+              <a href="https://www.technologyreview.com/2026/02/12/1132811/whats-next-for-chinese-open-source-ai/">technologyreview.com</a>
+            </li>
+
+            <li id="ref-epoch-us-china">
+              Epoch AI (2026).
+              <em>Chinese AI models have lagged the US frontier by 7 months on average since 2023.</em>
+              Analysis of the Epoch Capabilities Index showing the US-China frontier gap
+              ranged from 4 to 14 months.
+              <a href="https://epoch.ai/data-insights/us-vs-china-eci">epoch.ai</a>
+            </li>
+
+            <li id="ref-comsoc-capex">
+              IEEE ComSoc Technology Blog (2026).
+              <em>China&rsquo;s open source AI models to capture a larger share of 2026 global AI market.</em>
+              Cites Goldman Sachs and UBS data on the ~10&times; gap in compute
+              infrastructure investment between U.S. hyperscalers ($400B+) and
+              Chinese platforms (~$57B).
+              <a href="https://techblog.comsoc.org/2026/01/27/chinas-open-source-ai-models-to-capture-a-larger-share-of-2026-global-ai-market/">techblog.comsoc.org</a>
+            </li>
+
+	            <li id="ref-latent-space-glm5">
+	              Latent Space (2026).
+	              <em>[AINews] Z.ai GLM-5: New SOTA Open Weights LLM.</em>
+	              Covers the February 2026 releases of GLM-5 (744B) and MiniMax M2.5 (230B).
+	              <a href="https://www.latent.space/p/ainews-zai-glm-5-new-sota-open-weights">latent.space</a>
+	            </li>
+
+	            <li id="ref-glm5">
+	              Z.ai (2026).
+	              <em>GLM-5.</em>
+	              Official open-weights model card.
+	              <a href="https://huggingface.co/zai-org/GLM-5">huggingface.co/zai-org/GLM-5</a>
+	            </li>
+
+	            <li id="ref-kimi-k25">
+	              MoonshotAI (2026).
+	              <em>Kimi K2.5.</em>
+	              Official model repository and technical report.
+	              <a href="https://github.com/MoonshotAI/Kimi-K2.5">github.com/MoonshotAI/Kimi-K2.5</a>
+	            </li>
+
+	            <li id="ref-minimax-m25">
+	              MiniMax (2026).
+	              <em>MiniMax-M2.5.</em>
+	              Official open-weights model card.
+	              <a href="https://huggingface.co/MiniMaxAI/MiniMax-M2.5">huggingface.co/MiniMaxAI/MiniMax-M2.5</a>
+	            </li>
+
+	            <li id="ref-minimax-m25-news">
+	              MiniMax (2026).
+	              <em>MiniMax M2.5: The official release announcement.</em>
+	              <a href="https://www.minimaxi.com/news/minimax-m25">minimaxi.com</a>
+	            </li>
+
+	            <li id="ref-ppo">
+	              Schulman, J. et al. (2017).
+	              <em>Proximal Policy Optimization Algorithms.</em>
+	              Introduces PPO.
+	              <a href="https://arxiv.org/abs/1707.06347">arxiv.org/abs/1707.06347</a>
+	            </li>
+
+	            <li id="ref-lora-regret">
+	              Schulman, J. (2025).
+	              <em>LoRA Without Regret.</em>
+	              Thinking Machines Lab: Connectionism.
+              DOI: 10.64434/tml.20250929.
+              Establishes that LoRA fully matches full post-training in policy gradient RL
+              even at rank&nbsp;1. Derives an empirical LR scaling rule (optimal LoRA LR
+              &asymp; 10&times; full post-training LR), shows attention-only LoRA substantially
+              underperforms all-layer LoRA, and characterizes the &alpha;/r parameterization
+              invariance.
+              <a href="https://thinkingmachines.ai/blog/lora/">thinkingmachines.ai/blog/lora</a>
+            </li>
+
+            <li id="ref-lora">
+              Hu, E. J. et al. (2022).
+              <em>LoRA: Low-Rank Adaptation of Large Language Models.</em>
+              International Conference on Learning Representations (ICLR).
+              Introduces low-rank decomposition adapters that reduce trainable parameters
+              by up to 10,000&times; compared to full post-training, with no inference
+              latency overhead.
+              <a href="https://arxiv.org/abs/2106.09685">arxiv.org/abs/2106.09685</a>
+            </li>
+
+	            <li id="ref-grpo">
+	              Shao, Z. et al. (2024).
+	              <em>DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open
+	              Language Models.</em>
+	              Introduces GRPO (Group Relative Policy Optimization), which estimates policy
+	              gradient baselines from groups of sampled completions, eliminating the critic
+	              network required by <a href="https://arxiv.org/abs/1707.06347">PPO</a> and
+	              substantially reducing memory cost.
+	              <a href="https://arxiv.org/abs/2402.03300">arxiv.org/abs/2402.03300</a>
+	            </li>
+
+            <li id="ref-deepseek-r1">
+              DeepSeek-AI (2025).
+              <em>DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via
+              Reinforcement Learning.</em>
+              Demonstrates that RLVR alone &mdash; with no supervised chain-of-thought
+              data &mdash; can teach models to reason step by step, achieving
+              AIME 2024 accuracy of 71.0% (86.7% with majority voting), matching
+              OpenAI o1.
+              <a href="https://arxiv.org/abs/2501.12948">arxiv.org/abs/2501.12948</a>
+            </li>
+
+            <li id="ref-trinity-manifesto">
+              Arcee AI (2025).
+              <em>The Trinity Manifesto.</em>
+              Blog post introducing Trinity Mini and Trinity Nano, including benchmark
+              comparisons against Qwen3-30B-A3B Thinking, OLMo3-32B, and Magistral Small.
+              <a href="https://www.arcee.ai/blog/the-trinity-manifesto">arcee.ai/blog/the-trinity-manifesto</a>
+            </li>
+
+            <li id="ref-trinity-large-blog">
+              Arcee AI (2025).
+              <em>Trinity Large.</em>
+              Blog post presenting Trinity Large benchmark comparisons against
+              GLM-4.5, GLM-4.7, DeepSeek-V3, Llama 4 Maverick, and MiniMax M2.1.
+              <a href="https://www.arcee.ai/blog/trinity-large">arcee.ai/blog/trinity-large</a>
+            </li>
+
+            <li id="ref-olmo">
+              Team OLMo (2025).
+              <em>OLMo3.</em>
+              Allen Institute for AI.
+              A fully open foundation model family (weights, training data, code) released
+              by AI2 as a contribution to transparent Western open-source AI research.
+              <a href="https://arxiv.org/abs/2512.13961">arxiv.org/abs/2512.13961</a>
+            </li>
+
+            <li id="ref-mistral">
+              Mistral AI (2025).
+              <em>Magistral.</em>
+              Mistral AI.
+              Mistral's first reasoning model family, trained with RL on top of Mistral
+              Medium 3. Magistral Small (24B, Apache 2.0) is open-weight.
+              <a href="https://arxiv.org/abs/2506.10910">arxiv.org/abs/2506.10910</a>
+            </li>
+
+            <li id="ref-trinity">
+              Arcee AI (2026).
+              <em>Arcee Trinity Large Technical Report.</em>
+              Describes the Trinity family of sparse mixture-of-experts models, including
+              Trinity Mini (26B total / 3B active) used in this study.
+              <a href="https://www.arxiv.org/pdf/2602.17004">arxiv.org/pdf/2602.17004</a>
+            </li>
+
+            <li id="ref-openmed-drugprot">
+              maziyar/OpenMed_DrugProt (2025).
+              <em>DrugProt RL environment for Prime Intellect.</em>
+              The verifiers environment used for all experiments in this study.
+              <a href="https://app.primeintellect.ai/dashboard/environments/maziyar/openmed_drugprot">app.primeintellect.ai</a>
+            </li>
+
+            <li id="ref-drugprot-corpus">
+              Miranda, A. et al. (2021).
+              <em>Overview of DrugProt BioCreative VII Track&nbsp;1: Advanced Biomedical Named
+              Entity Recognition and Relation Extraction.</em>
+              BioCreative VII Workshop. Introduces the DrugProt corpus of PubMed abstracts
+              annotated with 13 drug-protein relation types.
+            </li>
+
+            <li id="ref-openmed-drugprot-parquet">
+              OpenMed (2025).
+              <em>drugprot-parquet dataset.</em>
+              Parquet version of DrugProt used by the environment.
+              <a href="https://huggingface.co/datasets/OpenMed/drugprot-parquet">huggingface.co/datasets/OpenMed/drugprot-parquet</a>
+            </li>
+
+            <li id="ref-qwen3">
+              Qwen Team (2025).
+              <em>Qwen3 Technical Report.</em>
+              Alibaba Cloud. Dense and MoE models from 0.6B to 235B parameters, with
+              unified thinking/non-thinking modes. Qwen3-30B-A3B is the MoE variant
+              used for comparison in this study.
+              <a href="https://arxiv.org/abs/2505.09388">arxiv.org/abs/2505.09388</a>
+            </li>
+
+            <li id="ref-moe-grpo">
+              Zhang, D. et al. (2025).
+              <em>Towards Stable and Effective Reinforcement Learning for Mixture-of-Experts.</em>
+              Identifies top-k routing drift between inference and training as the root
+              cause of MoE instability under GRPO, and proposes RSPO to address it via
+              router-aware importance sampling.
+              <a href="https://arxiv.org/abs/2510.23027">arxiv.org/abs/2510.23027</a>
+            </li>
+
+            <li id="ref-mup">
+              Yang, G. et al. (2022).
+              <em>Tensor Programs V: Tuning Large Neural Networks via Zero-Shot
+              Hyperparameter Transfer.</em>
+              NeurIPS 2022. Introduces Maximal Update Parametrization (&mu;P), enabling
+              hyperparameter transfer across model widths during pre-training.
+              <a href="https://arxiv.org/abs/2203.03466">arxiv.org/abs/2203.03466</a>
+            </li>
+          </ol>
+        </article>
+
+        <nav class="paginator" aria-label="Post navigation">
+          <a href="#top">back to top</a>
+        </nav>
+      </main>
+
+      <footer class="site-footer">
+        Bojan Jakimovski &middot; Petar Kalinovski &middot; <img src="https://cdn.worldvectorlogo.com/logos/loka-1.svg" alt="Loka" class="loka-logo" />&middot; 2026
+        &middot;
+      </footer>
+    </div>
+
+    <button class="back-to-top" id="back-to-top" aria-label="Back to top">&#8593;</button>
+
+    <!-- ═══════════════════ JAVASCRIPT ═══════════════════ -->
+    <script>
+      /* ── UI: reading progress, back-to-top, TOC highlight ── */
+      (function () {
+        var progress = document.getElementById("reading-progress");
+        function updateProgress() {
+          var h = document.documentElement.scrollHeight - window.innerHeight;
+          progress.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + "%";
+        }
+
+        var btn = document.getElementById("back-to-top");
+        function updateBtn() {
+          btn.classList.toggle("visible", window.scrollY > 400);
+        }
+        btn.addEventListener("click", function () {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+
+        var tocLinks = document.querySelectorAll(".toc-list a");
+        var sections = [];
+        tocLinks.forEach(function (link) {
+          var el = document.getElementById(link.getAttribute("href").slice(1));
+          if (el) sections.push({ el: el, link: link });
+        });
+
+        function updateToc() {
+          var pos = window.scrollY + 100,
+            current = null;
+          for (var i = sections.length - 1; i >= 0; i--) {
+            if (sections[i].el.offsetTop <= pos) {
+              current = sections[i];
+              break;
+            }
+          }
+          tocLinks.forEach(function (l) {
+            l.classList.remove("active");
+          });
+          if (current) current.link.classList.add("active");
+        }
+
+        var ticking = false;
+        window.addEventListener(
+          "scroll",
+          function () {
+            if (!ticking) {
+              requestAnimationFrame(function () {
+                updateProgress();
+                updateBtn();
+                updateToc();
+                ticking = false;
+              });
+              ticking = true;
+            }
+          },
+          { passive: true }
+        );
+
+        updateProgress();
+        updateBtn();
+        updateToc();
+      })();
+
+      /* ── Chart rendering ── */
+      (async function () {
+        /* ── Color palette ── */
+        var C = {
+          blue:   "#1877f2",  /* Loka primary   */
+          amber:  "#f7d046",  /* Loka secondary */
+          green:  "#0c6f71",  /* Loka fourth    */
+          gray:   "#050516",  /* Loka third     */
+          red:    "#050516",  /* alias for unstable runs */
+          purple: "#8b5cf6",
+          teal:   "#0c6f71",
+          blueLight: "rgba(24,119,242,0.12)",
+          redLight: "rgba(156,163,175,0.12)",
+          greenLight: "rgba(12,111,113,0.12)",
+          amberLight: "rgba(247,208,70,0.12)",
+          purpleLight: "rgba(139,92,246,0.12)",
+          tealLight: "rgba(20,184,166,0.12)",
+        };
+
+        /* ── CSV parser ── */
+        function parseCSV(text) {
+          var lines = text.trim().split("\n");
+          var headers = parseCSVLine(lines[0]);
+          var rows = [];
+          for (var i = 1; i < lines.length; i++) {
+            var vals = parseCSVLine(lines[i]);
+            var obj = {};
+            for (var j = 0; j < headers.length; j++) {
+              obj[headers[j]] = vals[j] || "";
+            }
+            rows.push(obj);
+          }
+          return { headers: headers, rows: rows };
+        }
+
+        function parseCSVLine(line) {
+          var result = [];
+          var current = "";
+          var inQuotes = false;
+          for (var i = 0; i < line.length; i++) {
+            var ch = line[i];
+            if (inQuotes) {
+              if (ch === '"' && line[i + 1] === '"') {
+                current += '"';
+                i++;
+              } else if (ch === '"') {
+                inQuotes = false;
+              } else {
+                current += ch;
+              }
+            } else {
+              if (ch === '"') {
+                inQuotes = true;
+              } else if (ch === ",") {
+                result.push(current);
+                current = "";
+              } else {
+                current += ch;
+              }
+            }
+          }
+          result.push(current);
+          return result;
+        }
+
+        /* ── Column extractor: find column by prefix ── */
+        function getCol(data, prefix) {
+          var col = data.headers.find(function (h) {
+            return h.indexOf(prefix) === 0 && h.indexOf("__MIN") === -1 && h.indexOf("__MAX") === -1;
+          });
+          if (!col) return null;
+          return data.rows.map(function (r) {
+            return { step: parseFloat(r["Step"]), value: r[col] === "" ? null : parseFloat(r[col]) };
+          });
+        }
+
+        /* ── Simple Moving Average ── */
+        function sma(points, window) {
+          if (!points) return [];
+          var result = [];
+          for (var i = 0; i < points.length; i++) {
+            if (points[i].value === null) {
+              result.push({ step: points[i].step, value: null });
+              continue;
+            }
+            var sum = 0, count = 0;
+            for (var j = Math.max(0, i - window + 1); j <= i; j++) {
+              if (points[j].value !== null) {
+                sum += points[j].value;
+                count++;
+              }
+            }
+            result.push({ step: points[i].step, value: count > 0 ? sum / count : null });
+          }
+          return result;
+        }
+
+        /* ── Convert to Chart.js dataset ── */
+        function toDataset(points, label, color, opts) {
+          opts = opts || {};
+          var filtered = (points || []).filter(function (p) { return p.value !== null; });
+          return {
+            label: label,
+            data: filtered.map(function (p) { return { x: p.step, y: p.value }; }),
+            borderColor: color,
+            backgroundColor: opts.fill ? color.replace(")", ",0.1)").replace("rgb", "rgba") : "transparent",
+            borderWidth: opts.thin ? 1 : 2,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0.3,
+            fill: opts.fill || false,
+            borderDash: opts.dash || [],
+          };
+        }
+
+        /* ── Common chart defaults ── */
+        var FONT = {
+          family: "'GT America', -apple-system, 'Segoe UI', 'Helvetica Neue', Helvetica, sans-serif",
+        };
+
+        function lineChartOpts(title) {
+          return {
+            responsive: true,
+            maintainAspectRatio: true,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+              legend: {
+                position: "top",
+                labels: { font: { family: FONT.family, size: 12 }, usePointStyle: true, pointStyle: "line", boxWidth: 24 },
+              },
+              title: { display: false },
+              tooltip: {
+                titleFont: { family: FONT.family },
+                bodyFont: { family: FONT.family },
+                callbacks: {
+                  label: function (ctx) {
+                    return ctx.dataset.label + ": " + (ctx.parsed.y !== null ? ctx.parsed.y.toFixed(3) : "N/A");
+                  },
+                },
+              },
+            },
+            scales: {
+              x: {
+                type: "linear",
+                title: { display: true, text: "Training step", font: { family: FONT.family, size: 12 } },
+                grid: { display: false },
+                ticks: { font: { family: FONT.family, size: 11 } },
+                min: 1,
+                max: 100,
+              },
+              y: {
+                title: { display: true, text: "Accuracy reward", font: { family: FONT.family, size: 12 } },
+                grid: { display: false },
+                ticks: { font: { family: FONT.family, size: 11 } },
+              },
+            },
+          };
+        }
+
+        function barChartOpts(xLabel, yLabel) {
+          return {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                titleFont: { family: FONT.family },
+                bodyFont: { family: FONT.family },
+                callbacks: {
+                  label: function (ctx) { return ctx.parsed.y.toFixed(3); },
+                },
+              },
+            },
+            scales: {
+              x: {
+                title: { display: true, text: xLabel, font: { family: FONT.family, size: 12 } },
+                grid: { display: false },
+                ticks: { font: { family: FONT.family, size: 11 } },
+              },
+              y: {
+                title: { display: true, text: yLabel, font: { family: FONT.family, size: 12 } },
+                grid: { display: false },
+                ticks: { font: { family: FONT.family, size: 11 } },
+              },
+            },
+          };
+        }
+
+        /* ── Fetch CSVs ── */
+        var csvFiles = [
+          "data/metrics_accuracy_reward.csv",
+          "data/metrics_reward_mean.csv",
+          "data/metrics_completion_len_mean.csv",
+          "data/metrics_reasoning_reward.csv",
+          "data/metrics_eval_avg2.csv",
+        ];
+
+        var csvTexts;
+        try {
+          csvTexts = await Promise.all(csvFiles.map(function (f) { return fetch(f).then(function (r) { return r.text(); }); }));
+        } catch (e) {
+          console.error("Failed to load CSV files:", e);
+          return;
+        }
+
+        var accData = parseCSV(csvTexts[0]);
+        var rewData = parseCSV(csvTexts[1]);
+        var lenData = parseCSV(csvTexts[2]);
+        var resData = parseCSV(csvTexts[3]);
+
+        var W = 5; // SMA window
+
+        /* ── Run name prefixes ── */
+        var RUN = {
+          a16: "w1-baseline-fast",
+          a32: "w1-alpha32-baseline",
+          a64: "w1-alpha64-baseline",
+          a128: "w1-alpha128-baseline",
+          lr1e6: "w1-alpha64-baseline",   // alpha64 baseline IS lr=1e-6
+          lr3e6: "w1-alpha64-lr3e-6 -",   // note trailing space-dash to avoid matching sub-runs
+          lr5e6: "w1-alpha64-lr5e-6",
+          lr1e5: "w1-alpha64-lr1e-5",
+          b64r16: "w1-alpha64-lr3e-6-b64-r16",
+          tok512: "w1-alpha64-lr3e-6 -",  // same as lr3e6 (512 is default)
+          tok1024: "w1-alpha64-lr3e-6-1024-max-tokens",
+          tok2048: "w1-alpha64-lr3e-6-2048-max-tokens",
+          t015: "w2-alpha64-lr3e-6-2048-max-tokens-t0.15",
+          r4: "w2-alpha64-lr3e-6-2048-max-tokens-r4",
+        };
+
+        /* Helper: get accuracy column for a run */
+        function acc(prefix) { return getCol(accData, prefix); }
+        function rew(prefix) { return getCol(rewData, prefix); }
+        function res(prefix) { return getCol(resData, prefix); }
+
+        /* ══════════════ CHART 1: Alpha sweep curves ══════════════ */
+        new Chart(document.getElementById("chart-alpha-curves"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset(sma(acc(RUN.a64), W), "\u03B1 = 64", C.blue),
+              toDataset(sma(acc(RUN.a32), W), "\u03B1 = 32", C.amber),
+              toDataset(sma((acc(RUN.a16)||[]).filter(function(p){return p.step<=100;}), W), "\u03B1 = 16", C.green),
+              toDataset(sma(acc(RUN.a128), W), "\u03B1 = 128 (terminated step\u00A070)", C.red),
+            ],
+          },
+          options: lineChartOpts(),
+        });
+
+        /* ══════════════ CHART 2: Alpha eval over time ══════════════ */
+        var evalData = parseCSV(csvTexts[4]);
+        function evl(prefix) { return getCol(evalData, prefix); }
+
+        var alphaEvalLineOpts = lineChartOpts();
+        alphaEvalLineOpts.scales.x.max = 75;
+        alphaEvalLineOpts.scales.y.min = 0.65;
+        alphaEvalLineOpts.scales.y.max = 0.80;
+        new Chart(document.getElementById("chart-alpha-eval"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset((evl(RUN.a64) ||[]).filter(function(p){return p.step<=83;}), "\u03B1 = 64",  C.blue),
+              toDataset((evl(RUN.a32) ||[]).filter(function(p){return p.step<=83;}), "\u03B1 = 32",  C.amber),
+              toDataset((evl(RUN.a16) ||[]).filter(function(p){return p.step<=83;}), "\u03B1 = 16",  C.green),
+              toDataset((evl(RUN.a128)||[]).filter(function(p){return p.step<=83;}), "\u03B1 = 128 (terminated step\u00A070)", C.red),
+            ],
+          },
+          options: alphaEvalLineOpts,
+        });
+
+        /* ══════════════ CHART 3: Alpha reasoning curves ══════════════ */
+        var alphaResOpts = lineChartOpts();
+        alphaResOpts.scales.y.min = 0.5;
+        alphaResOpts.scales.y.title.text = "Reasoning reward";
+        new Chart(document.getElementById("chart-alpha-reasoning"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset(sma((res(RUN.a64) ||[]).filter(function(p){return p.step<=100;}), W), "\u03B1 = 64",  C.blue),
+              toDataset(sma((res(RUN.a32) ||[]).filter(function(p){return p.step<=100;}), W), "\u03B1 = 32",  C.amber),
+              toDataset(sma((res(RUN.a16) ||[]).filter(function(p){return p.step<=100;}), W), "\u03B1 = 16",  C.green),
+              toDataset(sma((res(RUN.a128)||[]).filter(function(p){return p.step<=100;}), W), "\u03B1 = 128 (terminated step\u00A070)", C.red),
+            ],
+          },
+          options: alphaResOpts,
+        });
+
+        /* ══════════════ CHART 5: LR sweep curves ══════════════ */
+        var lrCurvesOpts = lineChartOpts();
+        lrCurvesOpts.scales.y.min = 0; /* collapse to 0 is the story here */
+        new Chart(document.getElementById("chart-lr-curves"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset(sma(acc(RUN.lr5e6), W), "LR 5e-6", C.green),
+              toDataset(sma(acc(RUN.lr3e6), W), "LR 3e-6", C.blue),
+              toDataset(sma(acc(RUN.lr1e6), W), "LR 1e-6", C.amber),
+              toDataset(sma(acc(RUN.lr1e5), W), "LR 1e-5", C.red),
+            ],
+          },
+          options: lrCurvesOpts,
+        });
+
+        /* ══════════════ CHART 5: LR snapshot at step 82 (log scale) ══════════════ */
+        var lrVals = [
+          { lr: 1e-6, run: RUN.lr1e6 },
+          { lr: 3e-6, run: RUN.lr3e6 },
+          { lr: 5e-6, run: RUN.lr5e6 },
+          { lr: 1e-5, run: RUN.lr1e5 },
+        ];
+        var lrSnapshotData = lrVals.map(function (item) {
+          var col = acc(item.run);
+          var pt = col ? col.find(function (p) { return p.step === 82; }) : null;
+          return { x: item.lr, y: pt ? pt.value : 0 };
+        });
+        var lrColors = [C.amber, C.blue, C.green, C.red];
+
+        new Chart(document.getElementById("chart-lr-snapshot"), {
+          type: "scatter",
+          data: {
+            datasets: [
+              {
+                label: "Accuracy at step 82",
+                data: lrSnapshotData,
+                backgroundColor: lrColors,
+                borderColor: lrColors,
+                pointRadius: 8,
+                pointHoverRadius: 10,
+                showLine: true,
+                borderColor: C.gray,
+                borderWidth: 1,
+                borderDash: [4, 4],
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                titleFont: { family: FONT.family },
+                bodyFont: { family: FONT.family },
+                callbacks: {
+                  title: function (items) { return "LR = " + items[0].parsed.x.toExponential(); },
+                  label: function (ctx) { return "Accuracy: " + ctx.parsed.y.toFixed(3); },
+                },
+              },
+            },
+            scales: {
+              x: {
+                type: "logarithmic",
+                title: { display: true, text: "Learning rate (log scale)", font: { family: FONT.family, size: 12 } },
+                grid: { display: false },
+                ticks: {
+                  font: { family: FONT.family, size: 11 },
+                  callback: function (val) { return val.toExponential(0); },
+                },
+              },
+              y: {
+                title: { display: true, text: "Accuracy reward", font: { family: FONT.family, size: 12 } },
+                grid: { display: false },
+                ticks: { font: { family: FONT.family, size: 11 } },
+                min: 0,
+              },
+            },
+          },
+        });
+
+        /* ══════════════ CHART 6: Batch size curves ══════════════ */
+        new Chart(document.getElementById("chart-batch-curves"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset(sma(acc(RUN.tok512), W), "128\u00D78 (default)", C.blue),
+              toDataset(sma(acc(RUN.b64r16), W), "64\u00D716", C.amber),
+            ],
+          },
+          options: lineChartOpts(),
+        });
+
+        /* ══════════════ CHART 7: Max tokens curves ══════════════ */
+        new Chart(document.getElementById("chart-maxtokens-curves"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset(sma(acc(RUN.tok2048), W), "2048 tokens", C.green),
+              toDataset(sma(acc(RUN.tok512), W), "512 tokens", C.blue),
+              toDataset(sma(acc(RUN.tok1024), W), "1024 tokens", C.amber),
+            ],
+          },
+          options: lineChartOpts(),
+        });
+
+        /* ══════════════ CHART 8: Max tokens snapshot ══════════════ */
+        var tokRuns = [
+          { label: "512", run: RUN.tok512 },
+          { label: "1024", run: RUN.tok1024 },
+          { label: "2048", run: RUN.tok2048 },
+        ];
+
+        /* Use reward mean for this snapshot to show composite quality */
+        var tokSnap = tokRuns.map(function (item) {
+          var col = rew(item.run);
+          var pt = col ? col.find(function (p) { return p.step === 100; }) : null;
+          return pt ? pt.value : 0;
+        });
+
+        var tokSnapOpts = barChartOpts("Max tokens", "Mean reward (composite)");
+        new Chart(document.getElementById("chart-maxtokens-snapshot"), {
+          type: "bar",
+          data: {
+            labels: tokRuns.map(function (t) { return t.label; }),
+            datasets: [
+              {
+                label: "Mean reward at step 100",
+                data: tokSnap,
+                backgroundColor: [C.blue, C.amber, C.green],
+                borderColor: [C.blue, C.amber, C.green],
+                borderWidth: 1,
+                borderRadius: 4,
+              },
+            ],
+          },
+          options: tokSnapOpts,
+        });
+
+        /* ══════════════ CHART 9: Max tokens reasoning curves ══════════════ */
+        var tokResOpts = lineChartOpts();
+        tokResOpts.scales.y.min = 0.5;
+        tokResOpts.scales.y.title.text = "Reasoning reward";
+        new Chart(document.getElementById("chart-maxtokens-reasoning"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset(sma(res(RUN.tok2048), W), "2048 tokens", C.blue),
+              toDataset(sma(res(RUN.tok1024), W), "1024 tokens", C.amber),
+              toDataset(sma(res(RUN.tok512),  W), "512 tokens",  C.green),
+            ],
+          },
+          options: tokResOpts,
+        });
+
+        /* ══════════════ CHART 10: Final ablations ══════════════ */
+        new Chart(document.getElementById("chart-final-curves"), {
+          type: "line",
+          data: {
+            datasets: [
+              toDataset(sma(acc(RUN.r4), W), "Rollout 4", C.teal),
+              toDataset(sma(acc(RUN.tok2048), W), "2048 baseline (r=8)", C.blue),
+              toDataset(sma(acc(RUN.t015), W), "Temp 0.15", C.amber),
+            ],
+          },
+          options: lineChartOpts(),
+        });
+      })();
+    </script>
+  </body>
+</html>

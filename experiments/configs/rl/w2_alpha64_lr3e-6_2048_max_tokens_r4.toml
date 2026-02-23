@@ -1,0 +1,34 @@
+name = "trinity-mini-drugprot-think-w2-alpha64-lr3e-6-2048-max-tokens-r4"
+model = "arcee-ai/Trinity-Mini"
+max_steps = 100
+env_files = ["secrets.env"]
+batch_size = 128
+rollouts_per_example = 4
+trajectory_strategy = "interleaved"
+learning_rate = 3e-6
+lora_alpha = 64
+max_async_level = 4
+
+[sampling]
+max_tokens = 2048
+temperature = 0.7
+
+[[env]]
+id = "maziyar/OpenMed_DrugProt@0.3.0"
+
+[eval]
+interval = 25
+num_examples = 100
+rollouts_per_example = 2
+
+[[eval.env]]
+id = "maziyar/OpenMed_DrugProt@0.3.0"
+
+[checkpoints]
+interval = 50
+keep_cloud = 3
+
+[wandb]
+project = "trinity-mini-drugprot-think"
+name = "w2-alpha64-lr3e-6-2048-max-tokens-r4"
+entity = "loka"

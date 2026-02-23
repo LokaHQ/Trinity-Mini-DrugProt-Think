@@ -1,0 +1,17 @@
+
+# outputs from `prime eval run`
+outputs/
+environments/*/outputs/
+
+# local training secrets
+**/secrets.env
+
+# pulled environments for inspection (prime env pull)
+pulled_envs/
+
+# local Codex metadata
+.codex/
+
+# python build artifacts
+__pycache__/
+*.pyc
