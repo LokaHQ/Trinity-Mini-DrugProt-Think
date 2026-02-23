@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://lokahq.github.io/Trinity-Mini-DrugProt-Think/">📝 <strong>Report</strong></a> &nbsp; | &nbsp;
-  <a href="https://medium.com/@jakimovski_bojan/9e1c1c430ce9">
+  <a href="https://medium.com/loka-engineering/deploying-trinity-mini-drugprot-think-on-amazon-sagemaker-ai-9e1c1c430ce9">
     <img
       src="https://www.sysgroup.com/wp-content/uploads/2025/02/Amazon_Web_Services-Logo.wine_.png"
       alt="AWS"
